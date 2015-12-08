@@ -155,7 +155,7 @@ def human_duration(s):
         h = int((s % 84600) / 3600)
         m = int(((s % 84600) % 3600) / 60)
         s = int(((s % 84600) % 3600) % 60)
-        
+
         hd_list = []
         if d > 0:
             hd_list.append(str(d) + ' days')
@@ -165,7 +165,7 @@ def human_duration(s):
             hd_list.append(str(m) + ' mins')
         if s > 0:
             hd_list.append(str(s) + ' secs')
-            
+
         hd = ' '.join(hd_list)
 
         return hd
@@ -204,7 +204,7 @@ def piratesize(size):
     split = size.split(" ")
     factor = float(split[0])
     unit = split[1].upper()
-    
+
     if unit == 'MiB':
         size = factor * 1048576
     elif unit == 'MB':
@@ -430,3 +430,9 @@ def process_json_kwargs(json_kwargs):
         params = json.loads(json_kwargs)
 
     return params
+
+def sanitize(string):
+    if string:
+        return unicode(string).replace('<','&lt;').replace('>','&gt;')
+    else:
+        return ''

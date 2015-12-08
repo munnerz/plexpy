@@ -180,18 +180,18 @@ class ActivityProcessor(object):
 
                 result = self.db.select(query=query, args=args)
                 
-                new_session = {'id': result[0][0],
-                               'rating_key': result[0][1],
-                               'user_id': result[0][2],
-                               'reference_id': result[0][3]}
+                new_session = {'id': result[0]['id'],
+                               'rating_key': result[0]['rating_key'],
+                               'user_id': result[0]['user_id'],
+                               'reference_id': result[0]['reference_id']}
 
                 if len(result) == 1:
                     prev_session = None
                 else:
-                    prev_session = {'id': result[1][0],
-                                    'rating_key': result[1][1],
-                                    'user_id': result[1][2],
-                                    'reference_id': result[1][3]}
+                    prev_session = {'id': result[1]['id'],
+                                    'rating_key': result[1]['rating_key'],
+                                    'user_id': result[1]['user_id'],
+                                    'reference_id': result[1]['reference_id']}
 
                 query = 'UPDATE session_history SET reference_id = ? WHERE id = ? '
                 # If rating_key is the same in the previous session, then set the reference_id to the previous row, else set the reference_id to the new id
@@ -286,16 +286,16 @@ class ActivityProcessor(object):
                     # The logged IP will always be the first match and we don't want localhost entries
                     if ipv4[0] != '127.0.0.1':
                         # check if IPv4 mapped IPv6 address (::ffff:xxx.xxx.xxx.xxx)
-                        if '::ffff:' + ipv4[0] in line:
-                            logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s "
-                                         u"and machineIdentifier %s."
-                                         % ('::ffff:' + ipv4[0], rating_key, machine_id))
-                            return '::ffff:' + ipv4[0]
-                        else:
-                            logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s "
-                                         u"and machineIdentifier %s."
-                                         % (ipv4[0], rating_key, machine_id))
-                            return ipv4[0]
+                        #if '::ffff:' + ipv4[0] in line:
+                        #    logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s "
+                        #                 u"and machineIdentifier %s."
+                        #                 % ('::ffff:' + ipv4[0], rating_key, machine_id))
+                        #    return '::ffff:' + ipv4[0]
+                        #else:
+                        logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s "
+                                        u"and machineIdentifier %s."
+                                        % (ipv4[0], rating_key, machine_id))
+                        return ipv4[0]
 
         logger.debug(u"PlexPy ActivityProcessor :: Unable to find IP address on first pass. "
                      u"Attempting fallback check in 5 seconds...")
@@ -315,14 +315,14 @@ class ActivityProcessor(object):
                 if ipv4:
                     # The logged IP will always be the first match and we don't want localhost entries
                     if ipv4[0] != '127.0.0.1':
-                        if '::ffff:' + ipv4[0] in line:
-                            logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s." %
-                                         ('::ffff:' + ipv4[0], rating_key))
-                            return '::ffff:' + ipv4[0]
-                        else:
-                            logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s." %
-                                         (ipv4[0], rating_key))
-                            return ipv4[0]
+                        #if '::ffff:' + ipv4[0] in line:
+                        #    logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s." %
+                        #                 ('::ffff:' + ipv4[0], rating_key))
+                        #    return '::ffff:' + ipv4[0]
+                        #else:
+                        logger.debug(u"PlexPy ActivityProcessor :: Matched IP address (%s) for stream ratingKey %s." %
+                                        (ipv4[0], rating_key))
+                        return ipv4[0]
 
         logger.debug(u"PlexPy ActivityProcessor :: Unable to find IP address on fallback search. Not logging IP address.")
 
@@ -400,7 +400,7 @@ class ActivityProcessor(object):
                                                  'WHERE session_key = ?',
                                                  [session_key])
             if buffer_count:
-                return buffer_count
+                return buffer_count['buffer_count']
 
             return 0
 
@@ -417,6 +417,6 @@ class ActivityProcessor(object):
                                               'WHERE session_key = ?',
                                               [session_key])
             if last_time:
-                return last_time
+                return last_time['buffer_last_triggered']
 
             return None

@@ -69,12 +69,12 @@ DOCUMENTATION :: END
 % for a in data['sessions']:
 <div class="dashboard-instance" id="instance-${a['session_key']}">
     % if a['media_type'] == 'movie' or a['media_type'] == 'episode' or a['media_type'] == 'track':
-    <a href="info?item_id=${a['rating_key']}">
+    <a href="info?rating_key=${a['rating_key']}">
     % endif
         <div class="dashboard-activity-poster">
-            % if a['media_type'] == 'movie' and not a['indexes']:
+            % if (a['media_type'] == 'movie' and not a['indexes']) or (a['indexes'] and not a['view_offset']):
             <div class="dashboard-activity-poster-face" style="background-image: url(pms_image_proxy?img=${a['art']}&width=500&height=280);"></div>
-            % elif a['media_type'] == 'episode' and not a['indexes']:
+            % elif (a['media_type'] == 'episode' and not a['indexes']) or (a['indexes'] and not a['view_offset']):
             <div class="dashboard-activity-poster-face" style="background-image: url(pms_image_proxy?img=${a['art']}&width=500&height=280);"></div>
             % elif a['indexes']:
             <div class="dashboard-activity-poster-face bif" style="background-image: url(pms_image_proxy?img=${a['bif_thumb']}&width=500&height=280); display: none;"></div>
@@ -198,6 +198,13 @@ DOCUMENTATION :: END
                     % else:
                     <span>IP: N/A</span>
                     % endif
+                    <br />
+                    ETA:
+                    <span id="stream-eta-${a['session_key']}">
+                        <script>
+                            $("#stream-eta-${a['session_key']}").html(moment().add(parseInt(${a['duration']}) - parseInt(${a['view_offset']}), 'milliseconds').format(time_format));
+                        </script>
+                    </span>
                 </div>
                 <div class="dashboard-activity-poster-info-time">
                     <span class="progress_time">${a['view_offset']}</span>/<span class="progress_time">${a['duration']}</span>
@@ -210,8 +217,8 @@ DOCUMENTATION :: END
     % endif
     <div class="dashboard-activity-progress">
         <div class="dashboard-activity-progress-bar">
-            <div class="bufferbar" style="width: ${a['transcode_progress']}%">${a['transcode_progress']}%</div>
-            <div class="bar" style="width: ${a['progress_percent']}%">${a['progress_percent']}%</div>
+            <div class="bufferbar" style="width: ${a['transcode_progress']}%" data-toggle="tooltip" title="Transcoder Progress">${a['transcode_progress']}%</div>
+            <div class="bar" style="width: ${a['progress_percent']}%" data-toggle="tooltip" title="Stream Progress">${a['progress_percent']}%</div>
         </div>
     </div>
     <div class="dashboard-activity-metadata-wrapper">
@@ -227,13 +234,13 @@ DOCUMENTATION :: END
             <i class="fa fa-spinner"></i>&nbsp;
             % endif
             % if a['media_type'] == 'episode':
-            <a href="info?item_id=${a['rating_key']}" title="${a['grandparent_title']} - ${a['title']}">${a['grandparent_title']} - ${a['title']}</a>
+            <a href="info?rating_key=${a['rating_key']}" title="${a['grandparent_title']} - ${a['title']}">${a['grandparent_title']} - ${a['title']}</a>
             % elif a['media_type'] == 'movie':
-            <a href="info?item_id=${a['rating_key']}" title="${a['title']}">${a['title']}</a>
+            <a href="info?rating_key=${a['rating_key']}" title="${a['title']}">${a['title']}</a>
             % elif a['media_type'] == 'clip':
             <span title="${a['title']}">${a['title']}</span>
             % elif a['media_type'] == 'track':
-            <a href="info?item_id=${a['rating_key']}" title="${a['grandparent_title']} - ${a['title']}">${a['grandparent_title']} - ${a['title']}</a>
+            <a href="info?rating_key=${a['rating_key']}" title="${a['grandparent_title']} - ${a['title']}">${a['grandparent_title']} - ${a['title']}</a>
             % elif a['media_type'] == 'photo':
             <span title="${a['parent_title']}">${a['parent_title']}</span>
             % else:
@@ -246,7 +253,7 @@ DOCUMENTATION :: END
             % elif a['media_type'] == 'movie':
             <span title="${a['year']}">${a['year']}</span>
             % elif a['media_type'] == 'track':
-            <a href="info?item_id=${a['parent_rating_key']}" title="${a['parent_title']}">${a['parent_title']}</a>
+            <a href="info?rating_key=${a['parent_rating_key']}" title="${a['parent_title']}">${a['parent_title']}</a>
             % elif a['media_type'] == 'photo':
             <span title="${a['title']}">${a['title']}</span>
             % else:
@@ -254,11 +261,7 @@ DOCUMENTATION :: END
             % endif
         </div>
         <div class="dashboard-activity-metadata-user">
-            % if a['user_id']:
             <a href="user?user_id=${a['user_id']}" title="${a['friendly_name']}">${a['friendly_name']}</a>
-            % else:
-            <a href="user?user=${a['user']}" title="${a['friendly_name']}">${a['friendly_name']}</a>
-            % endif
         </div>
 </div>
 </div>
@@ -280,6 +283,15 @@ DOCUMENTATION :: END
         e.preventDefault();
         $($(this).attr('data-target')).toggle();
     });
+
+    // Add hover class to dashboard-instance
+    $('.dashboard-activity-poster, .dashboard-activity-progress-bar').hover(function() {
+        $(this).closest('.dashboard-instance').addClass('hover');
+    }, function() {
+        $(this).closest('.dashboard-instance').removeClass('hover');
+    });
+
+    $('.bar, .bufferbar').tooltip({container: 'body', placement: 'right', delay: 50});
 </script>
 % else:
 <div class="text-muted">Nothing is currently being watched.</div><br>

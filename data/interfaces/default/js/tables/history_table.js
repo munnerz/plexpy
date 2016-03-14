@@ -18,7 +18,7 @@ history_table_options = {
         "lengthMenu":"Show _MENU_ entries per page",
         "info":"Showing _START_ to _END_ of _TOTAL_ history items",
         "infoEmpty":"Showing 0 to 0 of 0 entries",
-        "infoFiltered":"(filtered from _MAX_ total entries)",
+        "infoFiltered":"<span class='hidden-md hidden-sm hidden-xs'>(filtered from _MAX_ total entries)</span>",
         "emptyTable": "No data in table"
     },
     "pagingType": "bootstrap",
@@ -56,7 +56,7 @@ history_table_options = {
                 }
             },
             "searchable": false,
-            "width": "8%",
+            "width": "7%",
             "className": "no-wrap expand-history"
         },
         {
@@ -73,7 +73,7 @@ history_table_options = {
                     $(td).html(cellData);
                 }
             },
-            "width": "8%",
+            "width": "9%",
             "className": "no-wrap hidden-xs"
         },
         {
@@ -106,8 +106,8 @@ history_table_options = {
                     $(td).html(cellData);
                 }
             },
-            "width": "8%",
-            "className": "no-wrap hidden-md hidden-sm hidden-xs modal-control"
+            "width": "10%",
+            "className": "no-wrap hidden-md hidden-sm hidden-xs"
         },
         {
             "targets": [5],
@@ -115,11 +115,11 @@ history_table_options = {
             "createdCell": function (td, cellData, rowData, row, col) {
                 if (cellData !== '') {
                     var transcode_dec = '';
-                    if (rowData['video_decision'] === 'transcode' || rowData['audio_decision'] === 'transcode') {
+                    if (rowData['transcode_decision'] === 'transcode') {
                         transcode_dec = '<span class="transcode-tooltip" data-toggle="tooltip" title="Transcode"><i class="fa fa-server fa-fw"></i></span>';
-                    } else if (rowData['video_decision'] === 'copy' || rowData['audio_decision'] === 'copy') {
+                    } else if (rowData['transcode_decision'] === 'copy') {
                         transcode_dec = '<span class="transcode-tooltip" data-toggle="tooltip" title="Direct Stream"><i class="fa fa-video-camera fa-fw"></i></span>';
-                    } else if (rowData['video_decision'] === 'direct play' || rowData['audio_decision'] === 'direct play') {
+                    } else if (rowData['transcode_decision'] === 'direct play') {
                         transcode_dec = '<span class="transcode-tooltip" data-toggle="tooltip" title="Direct Play"><i class="fa fa-play-circle fa-fw"></i></span>';
                     }
                     $(td).html('<div><a href="#" data-target="#info-modal" data-toggle="modal"><div style="float: left;">' + transcode_dec + '&nbsp;' + cellData + '</div></a></div>');
@@ -133,27 +133,30 @@ history_table_options = {
             "data":"full_title",
             "createdCell": function (td, cellData, rowData, row, col) {
                 if (cellData !== '') {
+                    var parent_info = '';
                     var media_type = '';
                     var thumb_popover = '';
                     if (rowData['media_type'] === 'movie') {
+                        if (rowData['year']) { parent_info = ' (' + rowData['year'] + ')'; }
                         media_type = '<span class="media-type-tooltip" data-toggle="tooltip" title="Movie"><i class="fa fa-film fa-fw"></i></span>';
-                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=450&fallback=poster" data-height="120">' + cellData + ' (' + rowData['year'] + ')</span>'
-                        $(td).html('<div class="history-title"><a href="info?source=history&item_id=' + rowData['id'] + '"><div style="float: left;">' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
+                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=450&fallback=poster" data-height="120" data-width="80">' + cellData + parent_info + '</span>'
+                        $(td).html('<div class="history-title"><a href="info?source=history&rating_key=' + rowData['rating_key'] + '"><div style="float: left;">' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
                     } else if (rowData['media_type'] === 'episode') {
+                        if (rowData['parent_media_index'] && rowData['media_index']) { parent_info = ' (S' + rowData['parent_media_index'] + '&middot; E' + rowData['media_index'] + ')'; }
                         media_type = '<span class="media-type-tooltip" data-toggle="tooltip" title="Episode"><i class="fa fa-television fa-fw"></i></span>';
-                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=450&fallback=poster" data-height="120">' + cellData + ' \
-                            (S' + rowData['parent_media_index'] + '&middot; E' + rowData['media_index'] + ')</span>'
-                        $(td).html('<div class="history-title"><a href="info?source=history&item_id=' + rowData['id'] + '"><div style="float: left;" >' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
+                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=450&fallback=poster" data-height="120" data-width="80">' + cellData + parent_info + '</span>'
+                        $(td).html('<div class="history-title"><a href="info?source=history&rating_key=' + rowData['rating_key'] + '"><div style="float: left;" >' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
                     } else if (rowData['media_type'] === 'track') {
+                        if (rowData['parent_title']) { parent_info = ' (' + rowData['parent_title'] + ')'; }
                         media_type = '<span class="media-type-tooltip" data-toggle="tooltip" title="Track"><i class="fa fa-music fa-fw"></i></span>';
-                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=300&fallback=poster" data-height="80">' + cellData + ' (' + rowData['parent_title'] + ')</span>'
-                        $(td).html('<div class="history-title"><a href="info?source=history&item_id=' + rowData['id'] + '"><div style="float: left;">' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
+                        thumb_popover = '<span class="thumb-tooltip" data-toggle="popover" data-img="pms_image_proxy?img=' + rowData['thumb'] + '&width=300&height=300&fallback=poster" data-height="80" data-width="80">' + cellData + parent_info + '</span>'
+                        $(td).html('<div class="history-title"><a href="info?source=history&rating_key=' + rowData['rating_key'] + '"><div style="float: left;">' + media_type + '&nbsp;' + thumb_popover + '</div></a></div>');
                     } else {
-                        $(td).html('<a href="info?item_id=' + rowData['id'] + '">' + cellData + '</a>');
+                        $(td).html('<a href="info?rating_key=' + rowData['rating_key'] + '">' + cellData + '</a>');
                     }
                 }
             },
-            "width": "35%"
+            "width": "33%"
         },
         {
             "targets": [7],
@@ -226,7 +229,7 @@ history_table_options = {
             "searchable": false,
             "orderable": false,
             "className": "no-wrap hidden-md hidden-sm hidden-xs",
-            "width": "1%"
+            "width": "2%"
         },
     ],
     "drawCallback": function (settings) {
@@ -245,8 +248,9 @@ history_table_options = {
             container: 'body',
             trigger: 'hover',
             placement: 'right',
+            template: '<div class="popover history-thumbnail-popover" role="tooltip"><div class="arrow" style="top: 50%;"></div><div class="popover-content"></div></div>',
             content: function () {
-                return '<div class="history-thumbnail" style="background-image: url(' + $(this).data('img') + '); height: ' + $(this).data('height') + 'px;" />';
+                return '<div class="history-thumbnail" style="background-image: url(' + $(this).data('img') + '); height: ' + $(this).data('height') + 'px; width: ' + $(this).data('width') + 'px;" />';
             }
         });
 
@@ -260,11 +264,14 @@ history_table_options = {
             var rowData = this.data();
             if (rowData['group_count'] != 1 && rowData['reference_id'] in history_child_table) {
                 // if grouped row and a child table was already created
-                $(this.node()).find('i.fa').toggleClass('fa-plus-circle').toggleClass('fa-minus-circle');
+                $(this.node()).find('i.fa.fa-plus-circle').toggleClass('fa-plus-circle').toggleClass('fa-minus-circle');
                 this.child(childTableFormat(rowData)).show();
                 createChildTable(this, rowData)
             }
         });
+
+        $("#history_table_info").append('<span class="hidden-md hidden-sm hidden-xs"> with a duration of ' + settings.json.filter_duration +
+            ' (filtered from ' + settings.json.total_duration + ' total)</span>');
     },
     "preDrawCallback": function(settings) {
         var msg = "<i class='fa fa-refresh fa-spin'></i>&nbspFetching rows...";
@@ -300,7 +307,7 @@ history_table_options = {
 }
 
 // Parent table platform modal
-$('#history_table').on('click', '> tbody > tr > td.modal-control', function () {
+$('.history_table').on('click', '> tbody > tr > td.modal-control', function () {
     var tr = $(this).closest('tr');
     var row = history_table.row( tr );
     var rowData = row.data();
@@ -320,7 +327,7 @@ $('#history_table').on('click', '> tbody > tr > td.modal-control', function () {
 });
 
 // Parent table ip address modal
-$('#history_table').on('click', '> tbody > tr > td.modal-control-ip', function () {
+$('.history_table').on('click', '> tbody > tr > td.modal-control-ip', function () {
     var tr = $(this).closest('tr');
     var row = history_table.row( tr );
     var rowData = row.data();
@@ -343,7 +350,7 @@ $('#history_table').on('click', '> tbody > tr > td.modal-control-ip', function (
 });
 
 // Parent table delete mode
-$('#history_table').on('click', '> tbody > tr > td.delete-control > button', function () {
+$('.history_table').on('click', '> tbody > tr > td.delete-control > button', function () {
     var tr = $(this).closest('tr');
     var row = history_table.row( tr );
     var rowData = row.data();
@@ -392,7 +399,7 @@ $('#history_table').on('click', '> tbody > tr > td.delete-control > button', fun
 });
 
 // Parent table expand detailed history
-$('#history_table').on('click', '> tbody > tr > td.expand-history a', function () {
+$('.history_table').on('click', '> tbody > tr > td.expand-history a', function () {
     var tr = $(this).closest('tr');
     var row = history_table.row(tr);
     var rowData = row.data();
@@ -423,13 +430,13 @@ function childTableOptions(rowData) {
     history_child_options.pageLength = 10;
     history_child_options.bStateSave = false;
     history_child_options.ajax = {
-        "url": "get_history",
-        type: "post",
+        url: 'get_history',
+        type: 'post',
         data: function (d) {
             return {
-                'json_data': JSON.stringify(d),
-                'grouping': false,
-                'reference_id': rowData['reference_id']
+                json_data: JSON.stringify(d),
+                grouping: false,
+                reference_id: rowData['reference_id']
             };
         }
     }
@@ -444,8 +451,10 @@ function childTableOptions(rowData) {
         $('.watched-tooltip').tooltip();
         $('.thumb-tooltip').popover({
             html: true,
+            container: 'body',
             trigger: 'hover',
             placement: 'right',
+            template: '<div class="popover history-thumbnail-popover" role="tooltip"><div class="arrow" style="top: 50%;"></div><div class="popover-content"></div></div>',
             content: function () {
                 return '<div class="history-thumbnail" style="background-image: url(' + $(this).data('img') + '); height: ' + $(this).data('height') + 'px;" />';
             }
@@ -466,7 +475,7 @@ function childTableOptions(rowData) {
 // Format the detailed history child table
 function childTableFormat(rowData) {
     return '<div class="slider">' +
-            '<table id="history_child-' + rowData['reference_id'] + '">' +
+            '<table id="history_child-' + rowData['reference_id'] + '" width="100%">' +
             '<thead>' +
             '<tr>' +
                 '<th align="left" id="delete_row">Delete</th>' +

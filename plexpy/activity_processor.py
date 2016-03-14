@@ -13,7 +13,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with PlexPy.  If not, see <http://www.gnu.org/licenses/>.
 
-from plexpy import logger, pmsconnect, notification_handler, log_reader, database
+from plexpy import logger, pmsconnect, notification_handler, log_reader, database, notifiers
 
 import threading
 import plexpy
@@ -29,6 +29,7 @@ class ActivityProcessor(object):
     def write_session(self, session=None, notify=True):
         if session:
             values = {'session_key': session['session_key'],
+                      'section_id': session['section_id'],
                       'rating_key': session['rating_key'],
                       'media_type': session['media_type'],
                       'state': session['state'],
@@ -77,9 +78,10 @@ class ActivityProcessor(object):
             result = self.db.upsert('sessions', values, keys)
 
             if result == 'insert':
-                # Push any notifications - Push it on it's own thread so we don't hold up our db actions
-                if notify:
+                # Check if any notification agents have notifications enabled
+                if notify and any(d['on_play'] for d in notifiers.available_notification_agents()):
                     values.update({'ip_address': session['ip_address']})
+                    # Push any notifications - Push it on it's own thread so we don't hold up our db actions
                     threading.Thread(target=notification_handler.notify,
                                      kwargs=dict(stream_data=values, notify_action='play')).start()
 
@@ -96,11 +98,23 @@ class ActivityProcessor(object):
                         ip_address = {'ip_address': ip_address}
                         self.db.upsert('sessions', ip_address, keys)
 
-    def write_session_history(self, session=None, import_metadata=None, is_import=False, import_ignore_interval=0):
-        from plexpy import users
+                return True
 
-        user_data = users.Users()
-        user_details = user_data.get_user_friendly_name(user=session['user'])
+    def write_session_history(self, session=None, import_metadata=None, is_import=False, import_ignore_interval=0):
+        from plexpy import users, libraries
+
+        section_id = session['section_id'] if not is_import else import_metadata['section_id']
+
+        if not is_import:
+            user_data = users.Users()
+            user_details = user_data.get_details(user_id=session['user_id'])
+
+            library_data = libraries.Libraries()
+            library_details = library_data.get_details(section_id=section_id)
+
+            # Return false if failed to retrieve user or library details
+            if not user_details or not library_details:
+                return False
 
         if session:
             logging_enabled = False
@@ -110,8 +124,14 @@ class ActivityProcessor(object):
                     stopped = int(session['stopped'])
                 else:
                     stopped = int(time.time())
+            elif session['stopped']:
+                stopped = int(session['stopped'])
             else:
                 stopped = int(time.time())
+                self.set_session_state(session_key=session['session_key'],
+                                       state='stopped',
+                                       view_offset=session['viewOffset'],
+                                       stopped=stopped)
 
             if plexpy.CONFIG.MOVIE_LOGGING_ENABLE and str(session['rating_key']).isdigit() and \
                     session['media_type'] == 'movie':
@@ -131,14 +151,14 @@ class ActivityProcessor(object):
             else:
                 real_play_time = stopped - session['started']
 
-            if plexpy.CONFIG.LOGGING_IGNORE_INTERVAL and not is_import:
+            if not is_import and plexpy.CONFIG.LOGGING_IGNORE_INTERVAL:
                 if (session['media_type'] == 'movie' or session['media_type'] == 'episode') and \
                         (real_play_time < int(plexpy.CONFIG.LOGGING_IGNORE_INTERVAL)):
                     logging_enabled = False
                     logger.debug(u"PlexPy ActivityProcessor :: Play duration for ratingKey %s is %s secs which is less than %s "
                                  u"seconds, so we're not logging it." %
                                  (session['rating_key'], str(real_play_time), plexpy.CONFIG.LOGGING_IGNORE_INTERVAL))
-            if session['media_type'] == 'track' and not is_import:
+            if not is_import and session['media_type'] == 'track':
                 if real_play_time < 15 and session['duration'] >= 30:
                     logging_enabled = False
                     logger.debug(u"PlexPy ActivityProcessor :: Play duration for ratingKey %s is %s secs, "
@@ -150,14 +170,29 @@ class ActivityProcessor(object):
                     logging_enabled = False
                     logger.debug(u"PlexPy ActivityProcessor :: Play duration for ratingKey %s is %s secs which is less than %s "
                                  u"seconds, so we're not logging it." %
-                                 (session['rating_key'], str(real_play_time),
-                                  import_ignore_interval))
+                                 (session['rating_key'], str(real_play_time), import_ignore_interval))
 
-            if not user_details['keep_history'] and not is_import:
+            if not is_import and not user_details['keep_history']:
                 logging_enabled = False
-                logger.debug(u"PlexPy ActivityProcessor :: History logging for user '%s' is disabled." % session['user'])
+                logger.debug(u"PlexPy ActivityProcessor :: History logging for user '%s' is disabled." % user_details['username'])
+            elif not is_import and not library_details['keep_history']:
+                logging_enabled = False
+                logger.debug(u"PlexPy ActivityProcessor :: History logging for library '%s' is disabled." % library_details['section_name'])
 
             if logging_enabled:
+
+                # Fetch metadata first so we can return false if it fails
+                if not is_import:
+                    logger.debug(u"PlexPy ActivityProcessor :: Fetching metadata for item ratingKey %s" % session['rating_key'])
+                    pms_connect = pmsconnect.PmsConnect()
+                    result = pms_connect.get_metadata_details(rating_key=str(session['rating_key']))
+                    if result:
+                        metadata = result['metadata']
+                    else:
+                        return False
+                else:
+                    metadata = import_metadata
+
                 # logger.debug(u"PlexPy ActivityProcessor :: Attempting to write to session_history table...")
                 query = 'INSERT INTO session_history (started, stopped, rating_key, parent_rating_key, ' \
                         'grandparent_rating_key, media_type, user_id, user, ip_address, paused_counter, player, ' \
@@ -173,7 +208,7 @@ class ActivityProcessor(object):
                 self.db.action(query=query, args=args)
 
                 # Check if we should group the session, select the last two rows from the user
-                query = 'SELECT id, rating_key, user_id, reference_id FROM session_history \
+                query = 'SELECT id, rating_key, view_offset, user_id, reference_id FROM session_history \
                          WHERE user_id = ? ORDER BY id DESC LIMIT 2 '
 
                 args = [session['user_id']]
@@ -182,6 +217,7 @@ class ActivityProcessor(object):
                 
                 new_session = {'id': result[0]['id'],
                                'rating_key': result[0]['rating_key'],
+                               'view_offset': result[0]['view_offset'],
                                'user_id': result[0]['user_id'],
                                'reference_id': result[0]['reference_id']}
 
@@ -190,12 +226,14 @@ class ActivityProcessor(object):
                 else:
                     prev_session = {'id': result[1]['id'],
                                     'rating_key': result[1]['rating_key'],
+                                    'view_offset': result[1]['view_offset'],
                                     'user_id': result[1]['user_id'],
                                     'reference_id': result[1]['reference_id']}
 
                 query = 'UPDATE session_history SET reference_id = ? WHERE id = ? '
                 # If rating_key is the same in the previous session, then set the reference_id to the previous row, else set the reference_id to the new id
-                if (prev_session is not None) and (prev_session['rating_key'] == new_session['rating_key']):
+                if (prev_session is not None) and (prev_session['rating_key'] == new_session['rating_key'] \
+                    and prev_session['view_offset'] <= new_session['view_offset']):
                     args = [prev_session['reference_id'], new_session['id']]
                 else:
                     args = [new_session['id'], new_session['id']]
@@ -206,13 +244,22 @@ class ActivityProcessor(object):
                 #              % last_id)
 
                 # Write the session_history_media_info table
+
+                # Generate a combined transcode decision value
+                if session['video_decision'] == 'transcode' or session['audio_decision'] == 'transcode':
+                    transcode_decision = 'transcode'
+                elif session['video_decision'] == 'copy' or session['audio_decision'] == 'copy':
+                    transcode_decision = 'copy'
+                else:
+                    transcode_decision = 'direct play'
+
                 # logger.debug(u"PlexPy ActivityProcessor :: Attempting to write to session_history_media_info table...")
                 query = 'INSERT INTO session_history_media_info (id, rating_key, video_decision, audio_decision, ' \
                         'duration, width, height, container, video_codec, audio_codec, bitrate, video_resolution, ' \
                         'video_framerate, aspect_ratio, audio_channels, transcode_protocol, transcode_container, ' \
                         'transcode_video_codec, transcode_audio_codec, transcode_audio_channels, transcode_width, ' \
-                        'transcode_height) VALUES ' \
-                        '(last_insert_rowid(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        'transcode_height, transcode_decision) VALUES ' \
+                        '(last_insert_rowid(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 
                 args = [session['rating_key'], session['video_decision'], session['audio_decision'],
                         session['duration'], session['width'], session['height'], session['container'],
@@ -220,18 +267,11 @@ class ActivityProcessor(object):
                         session['video_resolution'], session['video_framerate'], session['aspect_ratio'],
                         session['audio_channels'], session['transcode_protocol'], session['transcode_container'],
                         session['transcode_video_codec'], session['transcode_audio_codec'],
-                        session['transcode_audio_channels'], session['transcode_width'], session['transcode_height']]
+                        session['transcode_audio_channels'], session['transcode_width'], session['transcode_height'],
+                        transcode_decision]
 
                 # logger.debug(u"PlexPy ActivityProcessor :: Writing session_history_media_info transaction...")
                 self.db.action(query=query, args=args)
-
-                if not is_import:
-                    logger.debug(u"PlexPy ActivityProcessor :: Fetching metadata for item ratingKey %s" % session['rating_key'])
-                    pms_connect = pmsconnect.PmsConnect()
-                    result = pms_connect.get_metadata_details(rating_key=str(session['rating_key']))
-                    metadata = result['metadata']
-                else:
-                    metadata = import_metadata
 
                 # Write the session_history_metadata table
                 directors = ";".join(metadata['directors'])
@@ -250,22 +290,26 @@ class ActivityProcessor(object):
                 # logger.debug(u"PlexPy ActivityProcessor :: Attempting to write to session_history_metadata table...")
                 query = 'INSERT INTO session_history_metadata (id, rating_key, parent_rating_key, ' \
                         'grandparent_rating_key, title, parent_title, grandparent_title, full_title, media_index, ' \
-                        'parent_media_index, thumb, parent_thumb, grandparent_thumb, art, media_type, year, ' \
-                        'originally_available_at, added_at, updated_at, last_viewed_at, content_rating, summary, ' \
-                        'tagline, rating, duration, guid, directors, writers, actors, genres, studio) VALUES ' \
+                        'parent_media_index, section_id, thumb, parent_thumb, grandparent_thumb, art, media_type, ' \
+                        'year, originally_available_at, added_at, updated_at, last_viewed_at, content_rating, ' \
+                        'summary, tagline, rating, duration, guid, directors, writers, actors, genres, studio) VALUES ' \
                         '(last_insert_rowid(), ' \
-                        '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                        '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 
                 args = [session['rating_key'], session['parent_rating_key'], session['grandparent_rating_key'],
                         session['title'], session['parent_title'], session['grandparent_title'], full_title,
-                        metadata['index'], metadata['parent_index'], metadata['thumb'], metadata['parent_thumb'],
-                        metadata['grandparent_thumb'], metadata['art'], session['media_type'], metadata['year'],
-                        metadata['originally_available_at'], metadata['added_at'], metadata['updated_at'],
+                        metadata['media_index'], metadata['parent_media_index'], metadata['section_id'], metadata['thumb'],
+                        metadata['parent_thumb'], metadata['grandparent_thumb'], metadata['art'], session['media_type'],
+                        metadata['year'], metadata['originally_available_at'], metadata['added_at'], metadata['updated_at'],
                         metadata['last_viewed_at'], metadata['content_rating'], metadata['summary'], metadata['tagline'], 
-                        metadata['rating'], metadata['duration'], metadata['guid'], directors, writers, actors, genres, metadata['studio']]
+                        metadata['rating'], metadata['duration'], metadata['guid'], directors, writers, actors, genres,
+                        metadata['studio']]
 
                 # logger.debug(u"PlexPy ActivityProcessor :: Writing session_history_metadata transaction...")
                 self.db.action(query=query, args=args)
+
+            # Return true when the session is successfully written to the database
+            return True
 
     def find_session_ip(self, rating_key=None, machine_id=None):
 
@@ -330,15 +374,7 @@ class ActivityProcessor(object):
 
     def get_session_by_key(self, session_key=None):
         if str(session_key).isdigit():
-            result = self.db.select('SELECT started, session_key, rating_key, media_type, title, parent_title, '
-                                    'grandparent_title, user_id, user, friendly_name, ip_address, player, '
-                                    'platform, machine_id, parent_rating_key, grandparent_rating_key, state, '
-                                    'view_offset, duration, video_decision, audio_decision, width, height, '
-                                    'container, video_codec, audio_codec, bitrate, video_resolution, '
-                                    'video_framerate, aspect_ratio, audio_channels, transcode_protocol, '
-                                    'transcode_container, transcode_video_codec, transcode_audio_codec, '
-                                    'transcode_audio_channels, transcode_width, transcode_height, '
-                                    'paused_counter, last_paused '
+            result = self.db.select('SELECT * '
                                     'FROM sessions WHERE session_key = ? LIMIT 1', args=[session_key])
             for session in result:
                 if session:
@@ -346,11 +382,14 @@ class ActivityProcessor(object):
 
         return None
 
-    def set_session_state(self, session_key=None, state=None, view_offset=0):
+    def set_session_state(self, session_key=None, state=None, view_offset=0, **kwargs):
         if str(session_key).isdigit() and str(view_offset).isdigit():
             values = {'view_offset': int(view_offset)}
             if state:
                 values['state'] = state
+
+            for k,v in kwargs.iteritems():
+                values[k] = v
 
             keys = {'session_key': session_key}
             result = self.db.upsert('sessions', values, keys)

@@ -47,3 +47,26 @@ PLATFORM_NAME_OVERRIDES = {'Konvergo': 'Plex Media Player',
                            'Mystery 3': 'Playstation 3',
                            'Mystery 4': 'Playstation 4',
                            'Mystery 5': 'Xbox 360'}
+
+MEDIA_FLAGS_AUDIO = {'ac.?3': 'dolby_digital',
+                     'truehd': 'dolby_truehd',
+                     '(dca|dta)': 'dts',
+                     'dts(hd_|-hd|-)?ma': 'dca-ma',
+                     'vorbis': 'ogg'
+                     }
+MEDIA_FLAGS_VIDEO = {'avc1': 'h264',
+                     'wmv(1|2)': 'wmv',
+                     'wmv3': 'wmvhd'
+                     }
+
+SCHEDULER_LIST = ['Check GitHub for updates',
+                  'Check for active sessions',
+                  'Check for recently added items',
+                  'Check for Plex updates',
+                  'Check for Plex remote access',
+                  'Refresh users list',
+                  'Refresh libraries list',
+                  'Refresh Plex server URLs',
+                  'Refresh Plex server name',
+                  'Backup PlexPy database'
+                  ]

@@ -16,10 +16,10 @@
 #  You should have received a copy of the GNU General Public License
 #  along with PlexPy.  If not, see <http://www.gnu.org/licenses/>.
 
-from plexpy import logger, helpers
 from httplib import HTTPSConnection
 from httplib import HTTPConnection
 import ssl
+from plexpy import logger, helpers
 
 
 class HTTPHandler(object):
@@ -44,7 +44,8 @@ class HTTPHandler(object):
                      headers=None,
                      output_format='raw',
                      return_type=False,
-                     no_token=False):
+                     no_token=False,
+                     timeout=20):
 
         valid_request_types = ['GET', 'POST', 'PUT', 'DELETE']
 
@@ -56,12 +57,12 @@ class HTTPHandler(object):
             if proto.upper() == 'HTTPS':
                 if not self.ssl_verify and hasattr(ssl, '_create_unverified_context'):
                     context = ssl._create_unverified_context()
-                    handler = HTTPSConnection(host=self.host, port=self.port, timeout=10, context=context)
+                    handler = HTTPSConnection(host=self.host, port=self.port, timeout=timeout, context=context)
                     logger.warn(u"PlexPy HTTP Handler :: Unverified HTTPS request made. This connection is not secure.")
                 else:
-                    handler = HTTPSConnection(host=self.host, port=self.port, timeout=10)
+                    handler = HTTPSConnection(host=self.host, port=self.port, timeout=timeout)
             else:
-                handler = HTTPConnection(host=self.host, port=self.port, timeout=10)
+                handler = HTTPConnection(host=self.host, port=self.port, timeout=timeout)
 
             token_string = ''
             if not no_token:
